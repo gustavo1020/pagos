@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: pagos-db
+    environment:
+      POSTGRES_USER: pagos_user
+      POSTGRES_PASSWORD: pagos_password_secure
+      POSTGRES_DB: pagos_db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pagos_user -d pagos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pagos-network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pagos-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://pagos_user:pagos_password_secure@postgres:5432/pagos_db
+      NEXTAUTH_SECRET: super_secret_key_for_development_12345678901234567890
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: https://your-project.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: your-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: your-service-role-key
+      OPENSSL_CONF: /etc/ssl/openssl.cnf
+      LD_LIBRARY_PATH: /lib64:/usr/lib64:/usr/local/lib64
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/.next
+      - /app/node_modules
+    command: >
+      sh -c "
+        chmod +x ./wait-for-db.sh &&
+        echo 'Waiting for PostgreSQL...' &&
+        ./wait-for-db.sh postgres 5432 60 &&
+        echo 'PostgreSQL is ready, running migrations...' &&
+        npx prisma db push --skip-generate &&
+        echo 'Running seed...' &&
+        npx prisma db seed &&
+        echo 'Starting app...' &&
+        npm run dev
+      "
+    networks:
+      - pagos-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  pagos-network:
+    driver: bridge

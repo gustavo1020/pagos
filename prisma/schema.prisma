@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  username  String     @unique
+  passwordHash String
+  role      String     @default("user") // "admin" or "user"
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  creditsDebts   Debt[] @relation("creditor")
+  debtoryDebts   Debt[] @relation("debtor")
+  paymentsFrom   Payment[] @relation("payer")
+  paymentsTo     Payment[] @relation("payee")
+}
+
+model Debt {
+  id          String     @id @default(cuid())
+  creditor    User       @relation("creditor", fields: [creditorId], references: [id], onDelete: Cascade)
+  creditorId  String
+  debtor      User       @relation("debtor", fields: [debtorId], references: [id], onDelete: Cascade)
+  debtorId    String
+  amount      Int        // Amount in cents (ARS)
+  description String?
+  date        DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([creditorId])
+  @@index([debtorId])
+}
+
+model Payment {
+  id        String     @id @default(cuid())
+  from      User       @relation("payer", fields: [fromUserId], references: [id], onDelete: Cascade)
+  fromUserId String
+  to        User       @relation("payee", fields: [toUserId], references: [id], onDelete: Cascade)
+  toUserId  String
+  amount    Int        // Amount in cents (ARS)
+  comment   String?
+  receiptUrl String?
+  date      DateTime   @default(now())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([fromUserId])
+  @@index([toUserId])
+}
