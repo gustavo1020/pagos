@@ -50,16 +50,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const isAdmin = (session.user as any).role === "admin";
-    if (!isAdmin) {
-      return NextResponse.json(
-        { error: "Only admins can create debts" },
-        { status: 403 }
-      );
-    }
 
     const body = await request.json();
-    const { creditorId, debtorId, amount, description, date } = body;
+    let { creditorId, debtorId, amount, description, date } = body;
+
+    // Non-admin users can only create debts where they are the creditor
+    if (!isAdmin) {
+      creditorId = userId;
+    }
 
     if (!creditorId || !debtorId || !amount) {
       return NextResponse.json(

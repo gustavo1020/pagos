@@ -161,11 +161,13 @@ export default function NuevaDeudaPage() {
                   <SelectValue placeholder="Selecciona deudor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.username}
-                    </SelectItem>
-                  ))}
+                  {users
+                    .filter((user) => isAdmin || user.id !== currentUserId)
+                    .map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.username}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
