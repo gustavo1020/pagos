@@ -26,9 +26,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/deudas", label: "Deudas", icon: "💳" },
     { href: "/dashboard/pagos", label: "Pagos", icon: "💰" },
     { href: "/dashboard/pagos/nuevo", label: "Registrar Pago", icon: "➕" },
+    { href: "/dashboard/deudas/nueva", label: "Nueva Deuda", icon: "📝" },
     ...(isAdmin
       ? [
-          { href: "/dashboard/deudas/nueva", label: "Nueva Deuda (Admin)", icon: "📝" },
           { href: "/dashboard/admin", label: "Panel Admin", icon: "⚙️" },
         ]
       : []),
