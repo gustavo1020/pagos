@@ -33,6 +33,10 @@ export default function NuevaDeudaPage() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  const isAdmin = (session?.user as any)?.role === "admin";
+  const currentUserId = (session?.user as any)?.id;
+
   const [form, setForm] = useState({
     creditorId: "",
     debtorId: "",
@@ -41,12 +45,15 @@ export default function NuevaDeudaPage() {
     date: new Date().toISOString().split("T")[0],
   });
 
-  const isAdmin = (session?.user as any)?.role === "admin";
-
   useEffect(() => {
-    if (!isAdmin) {
-      router.push("/dashboard");
+    if (!session) {
+      router.push("/login");
       return;
+    }
+
+    // Si no es admin, establece el creditor como el usuario actual
+    if (!isAdmin && currentUserId) {
+      setForm((prev) => ({ ...prev, creditorId: currentUserId }));
     }
 
     const fetchUsers = async () => {
@@ -61,7 +68,7 @@ export default function NuevaDeudaPage() {
     };
 
     fetchUsers();
-  }, [isAdmin, router]);
+  }, [isAdmin, currentUserId, router, session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,23 +124,29 @@ export default function NuevaDeudaPage() {
           <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
             <div className="space-y-2">
               <Label htmlFor="creditor">Acreedor (Quién da dinero)</Label>
-              <Select
-                value={form.creditorId}
-                onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, creditorId: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona acreedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.username}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isAdmin ? (
+                <Select
+                  value={form.creditorId}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({ ...prev, creditorId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona acreedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="p-3 bg-gray-100 rounded border border-gray-300 text-gray-700">
+                  {users.find((u) => u.id === currentUserId)?.username || "Tu usuario"}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
