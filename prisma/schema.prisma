@@ -31,7 +31,8 @@ model Debt {
   creditorId  String
   debtor      User       @relation("debtor", fields: [debtorId], references: [id], onDelete: Cascade)
   debtorId    String
-  amount      Int        // Amount in cents (ARS)
+  amount      Int        // Amount in cents
+  currency    String     @default("ARS") // "ARS" or "USD"
   description String?
   date        DateTime   @default(now())
   createdAt   DateTime   @default(now())
@@ -47,7 +48,9 @@ model Payment {
   fromUserId String
   to        User       @relation("payee", fields: [toUserId], references: [id], onDelete: Cascade)
   toUserId  String
-  amount    Int        // Amount in cents (ARS)
+  amount    Int        // Amount in cents
+  currency  String     @default("ARS") // "ARS" or "USD"
+  exchangeRate Float?   // Exchange rate used if payment in ARS for USD debt
   comment   String?
   receiptUrl String?
   date      DateTime   @default(now())

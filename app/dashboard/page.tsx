@@ -59,13 +59,16 @@ export default async function DashboardPage() {
         },
       });
 
-  // Calculate balances between users
+  // Calculate balances between users by currency
   const balances: Record<
     string,
     {
       otherUserId: string;
       otherUsername: string;
-      amountOwed: number; // Positive if current user owes, negative if other owes current user
+      balancesByCurrency: Record<
+        string,
+        number // Positive if current user owes, negative if other owes current user
+      >;
     }
   > = {};
 
@@ -73,51 +76,75 @@ export default async function DashboardPage() {
     if (user.id !== userId || isAdmin) {
       const otherUserId = user.id;
       const otherUsername = user.username;
+      const balancesByCurrency: Record<string, number> = {};
 
-      const userDebts = debts
-        .filter((d) => {
-          if (isAdmin) {
-            return (
-              (d.creditorId === userId && d.debtorId === otherUserId) ||
-              (d.debtorId === userId && d.creditorId === otherUserId)
-            );
-          } else {
-            return (
-              (d.creditorId === userId && d.debtorId === otherUserId) ||
-              (d.debtorId === userId && d.creditorId === otherUserId)
-            );
+      // Get user debts and calculate balance after deducting payments
+      const userDebts = debts.filter((d) => {
+        if (isAdmin) {
+          return (
+            (d.creditorId === userId && d.debtorId === otherUserId) ||
+            (d.debtorId === userId && d.creditorId === otherUserId)
+          );
+        } else {
+          return (
+            (d.creditorId === userId && d.debtorId === otherUserId) ||
+            (d.debtorId === userId && d.creditorId === otherUserId)
+          );
+        }
+      });
+
+      // Get user payments related to these debts
+      const userPayments = payments.filter((p) => {
+        if (isAdmin) {
+          return (
+            (p.fromUserId === userId && p.toUserId === otherUserId) ||
+            (p.toUserId === userId && p.fromUserId === otherUserId)
+          );
+        } else {
+          return (
+            (p.fromUserId === userId && p.toUserId === otherUserId) ||
+            (p.toUserId === userId && p.fromUserId === otherUserId)
+          );
+        }
+      });
+
+      // Calculate balance for each debt considering payments
+      userDebts.forEach((d) => {
+        const sign = d.debtorId === userId ? 1 : -1;
+        let balanceAmount = d.amount;
+
+        // Find payments from debtor to creditor that apply to this debt
+        const relevantPayments = userPayments.filter(
+          (p) => p.fromUserId === d.debtorId && p.toUserId === d.creditorId
+        );
+
+        // Subtract payments considering currency conversion
+        relevantPayments.forEach((payment) => {
+          if (payment.currency === d.currency) {
+            // Same currency: direct subtraction
+            balanceAmount -= payment.amount;
+          } else if (d.currency === "USD" && payment.currency === "ARS" && payment.exchangeRate) {
+            // ARS payment towards USD debt: convert using exchange rate
+            const usdAmount = Math.floor(payment.amount / payment.exchangeRate);
+            balanceAmount -= usdAmount;
+          } else if (d.currency === "ARS" && payment.currency === "USD" && payment.exchangeRate) {
+            // USD payment towards ARS debt: convert using exchange rate
+            const arsAmount = payment.amount * payment.exchangeRate;
+            balanceAmount -= arsAmount;
           }
-        })
-        .reduce((sum, d) => {
-          if (d.debtorId === userId) return sum + d.amount;
-          return sum - d.amount;
-        }, 0);
+        });
 
-      const userPayments = payments
-        .filter((p) => {
-          if (isAdmin) {
-            return (
-              (p.fromUserId === userId && p.toUserId === otherUserId) ||
-              (p.toUserId === userId && p.fromUserId === otherUserId)
-            );
-          } else {
-            return (
-              (p.fromUserId === userId && p.toUserId === otherUserId) ||
-              (p.toUserId === userId && p.fromUserId === otherUserId)
-            );
-          }
-        })
-        .reduce((sum, p) => {
-          if (p.fromUserId === userId) return sum + p.amount;
-          return sum - p.amount;
-        }, 0);
+        // Add net balance to total
+        balanceAmount = Math.max(0, balanceAmount);
+        balancesByCurrency[d.currency] = (balancesByCurrency[d.currency] || 0) + balanceAmount * sign;
+      });
 
-      const balance = userDebts + userPayments;
-      if (balance !== 0) {
+      // Only add if there's any balance
+      if (Object.values(balancesByCurrency).some((b) => b !== 0)) {
         balances[otherUserId] = {
           otherUserId,
           otherUsername,
-          amountOwed: balance,
+          balancesByCurrency,
         };
       }
     }
@@ -125,103 +152,211 @@ export default async function DashboardPage() {
 
   const balanceEntries = Object.values(balances);
 
-  const totalOwed = balanceEntries
-    .filter((b) => b.amountOwed > 0)
-    .reduce((sum, b) => sum + b.amountOwed, 0);
+  // Calculate average exchange rate from payments
+  const paymentsWithExchangeRate = payments.filter((p) => p.exchangeRate);
+  const averageExchangeRate = paymentsWithExchangeRate.length > 0
+    ? paymentsWithExchangeRate.reduce((sum, p) => sum + (p.exchangeRate || 0), 0) /
+      paymentsWithExchangeRate.length
+    : 1000; // Default fallback rate if no payments with exchange rate
 
-  const totalCredits = balanceEntries
-    .filter((b) => b.amountOwed < 0)
-    .reduce((sum, b) => sum + Math.abs(b.amountOwed), 0);
+  // Calculate totals by currency
+  const totals: Record<string, { owed: number; credits: number }> = {
+    ARS: { owed: 0, credits: 0 },
+    USD: { owed: 0, credits: 0 },
+  };
+
+  balanceEntries.forEach((balance) => {
+    Object.entries(balance.balancesByCurrency).forEach(([currency, amount]) => {
+      if (amount > 0) {
+        totals[currency].owed += amount;
+      } else {
+        totals[currency].credits += Math.abs(amount);
+      }
+    });
+  });
+
+  // Calculate totals in USD (for net balance)
+  const totalOwedInUSD = (totals.ARS.owed / averageExchangeRate) + totals.USD.owed;
+  const totalCreditsInUSD = (totals.ARS.credits / averageExchangeRate) + totals.USD.credits;
+  const netBalanceInUSD = totalOwedInUSD - totalCreditsInUSD;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Resumen General - Main Summary */}
+        <div className="space-y-4">
+          <h2 className="text-3xl font-bold">Resumen General</h2>
+          
+          {/* Main Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Debés en ARS */}
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wide">Debés (ARS)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-500">
+                  {formatCurrency(totals.ARS.owed)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Pesos
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Debés en USD */}
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wide">Debés (USD)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-500">
+                  {formatCurrency(totals.USD.owed)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Dólares
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Te Deben en ARS */}
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wide">Te Deben (ARS)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-500">
+                  {formatCurrency(totals.ARS.credits)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Pesos
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Te Deben en USD */}
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wide">Te Deben (USD)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-500">
+                  {formatCurrency(totals.USD.credits)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Dólares
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Balance Neto en USD */}
+            <Card className="lg:col-span-1 lg:row-span-1 border-2 border-amber-500">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wide text-amber-500">Balance Neto (USD)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-3xl font-bold ${
+                  netBalanceInUSD > 0 ? "text-red-500" : "text-green-500"
+                }`}>
+                  {formatCurrency(Math.abs(netBalanceInUSD))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {netBalanceInUSD > 0 ? "Debés" : "Te deben"}
+                </p>
+                <p className="text-xs text-amber-600 mt-2">
+                  Cotización: ${averageExchangeRate.toFixed(2)} ARS/USD
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Detalles por Moneda */}
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold">Detalles por Moneda</h2>
+          
+          {/* Deudas en Pesos */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Debés</CardTitle>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-blue-500 text-white px-2 py-1 rounded text-sm">ARS</span>
+                Deudas en Pesos Argentinos
+              </CardTitle>
+              <CardDescription>
+                Detalles de deudas pendientes en pesos
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-500">
-                {formatCurrency(totalOwed)}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Total de deudas
-              </p>
+              {balanceEntries.filter((b) => (b.balancesByCurrency.ARS || 0) !== 0).length === 0 ? (
+                <p className="text-muted-foreground">Sin deudas en pesos</p>
+              ) : (
+                <div className="space-y-3">
+                  {balanceEntries
+                    .filter((b) => (b.balancesByCurrency.ARS || 0) !== 0)
+                    .map((balance) => {
+                      const amount = balance.balancesByCurrency.ARS || 0;
+                      return (
+                        <div
+                          key={`${balance.otherUserId}-ARS`}
+                          className="flex items-center justify-between p-3 rounded-lg border border-zinc-800"
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium">{balance.otherUsername}</p>
+                          </div>
+                          <Badge
+                            variant={amount > 0 ? "destructive" : "secondary"}
+                          >
+                            {amount > 0 ? "Debés" : "Te Deben"} {formatCurrency(Math.abs(amount))}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </CardContent>
           </Card>
 
+          {/* Deudas en Dólares */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Te Deben</CardTitle>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-green-600 text-white px-2 py-1 rounded text-sm">USD</span>
+                Deudas en Dólares Estadounidenses
+              </CardTitle>
+              <CardDescription>
+                Detalles de deudas pendientes en dólares
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-500">
-                {formatCurrency(totalCredits)}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Total de créditos
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Balance Neto</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-2xl font-bold ${
-                  totalOwed > totalCredits ? "text-red-500" : "text-green-500"
-                }`}
-              >
-                {formatCurrency(Math.abs(totalOwed - totalCredits))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {totalOwed > totalCredits ? "Debes" : "Te deben"}
-              </p>
+              {balanceEntries.filter((b) => (b.balancesByCurrency.USD || 0) !== 0).length === 0 ? (
+                <p className="text-muted-foreground">Sin deudas en dólares</p>
+              ) : (
+                <div className="space-y-3">
+                  {balanceEntries
+                    .filter((b) => (b.balancesByCurrency.USD || 0) !== 0)
+                    .map((balance) => {
+                      const amount = balance.balancesByCurrency.USD || 0;
+                      return (
+                        <div
+                          key={`${balance.otherUserId}-USD`}
+                          className="flex items-center justify-between p-3 rounded-lg border border-zinc-800"
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium">{balance.otherUsername}</p>
+                          </div>
+                          <Badge
+                            variant={amount > 0 ? "destructive" : "secondary"}
+                          >
+                            {amount > 0 ? "Debés" : "Te Deben"} {formatCurrency(Math.abs(amount))}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
-
-        {/* Balances with Users */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Balance por Usuario</CardTitle>
-            <CardDescription>
-              Deuda neta con cada persona
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {balanceEntries.length === 0 ? (
-              <p className="text-muted-foreground">Sin transacciones</p>
-            ) : (
-              <div className="space-y-4">
-                {balanceEntries.map((balance) => (
-                  <div
-                    key={balance.otherUserId}
-                    className="flex items-center justify-between p-4 rounded-lg border border-zinc-800 hover:bg-zinc-900/50"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium">{balance.otherUsername}</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge
-                        variant={
-                          balance.amountOwed > 0 ? "destructive" : "secondary"
-                        }
-                      >
-                        {balance.amountOwed > 0 ? "Debés" : "Te Deben"}{" "}
-                        {formatCurrency(Math.abs(balance.amountOwed))}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );

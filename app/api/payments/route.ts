@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { fromUserId, toUserId, amount, comment, receiptUrl, date } = body;
+    const { fromUserId, toUserId, amount, currency, exchangeRate, comment, receiptUrl } = body;
 
     // Users can only create payments from themselves
     if (fromUserId !== userId && (session.user as any).role !== "admin") {
@@ -71,9 +71,10 @@ export async function POST(request: NextRequest) {
         fromUserId,
         toUserId,
         amount: parseInt(amount),
+        currency: currency || "ARS",
+        exchangeRate: exchangeRate || null,
         comment: comment || null,
         receiptUrl: receiptUrl || null,
-        date: new Date(date),
       },
       include: {
         from: true,

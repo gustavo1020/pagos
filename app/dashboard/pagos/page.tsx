@@ -42,6 +42,8 @@ interface Payment {
     username: string;
   };
   amount: number;
+  currency: string;
+  exchangeRate?: number;
   comment?: string;
   receiptUrl?: string;
   date: string;
@@ -141,6 +143,8 @@ export default function PagosPage() {
                       <TableHead>De</TableHead>
                       <TableHead>Para</TableHead>
                       <TableHead>Monto</TableHead>
+                      <TableHead>Moneda</TableHead>
+                      <TableHead>Cotización</TableHead>
                       <TableHead>Comentario</TableHead>
                       <TableHead>Comprobante</TableHead>
                     </TableRow>
@@ -159,6 +163,14 @@ export default function PagosPage() {
                           <Badge variant="outline">
                             {formatCurrency(payment.amount)}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {payment.currency}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {payment.exchangeRate ? `$${payment.exchangeRate.toFixed(2)}` : "-"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {payment.comment || "-"}

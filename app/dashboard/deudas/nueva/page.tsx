@@ -42,7 +42,7 @@ export default function NuevaDeudaPage() {
     debtorId: "",
     amount: "",
     description: "",
-    date: new Date().toISOString().split("T")[0],
+    currency: "ARS",
   });
 
   useEffect(() => {
@@ -92,8 +92,8 @@ export default function NuevaDeudaPage() {
           creditorId: form.creditorId,
           debtorId: form.debtorId,
           amount: parseInt(form.amount) * 100, // Convert to cents
+          currency: form.currency,
           description: form.description || null,
-          date: new Date(form.date),
         }),
       });
 
@@ -173,7 +173,7 @@ export default function NuevaDeudaPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount">Monto (ARS)</Label>
+              <Label htmlFor="amount">Monto</Label>
               <Input
                 id="amount"
                 type="number"
@@ -189,6 +189,24 @@ export default function NuevaDeudaPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="currency">Moneda</Label>
+              <Select
+                value={form.currency}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, currency: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona moneda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ARS">ARS (Pesos Argentinos)</SelectItem>
+                  <SelectItem value="USD">USD (Dólares)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="description">Descripción (opcional)</Label>
               <Input
                 id="description"
@@ -198,19 +216,6 @@ export default function NuevaDeudaPage() {
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, description: e.target.value }))
                 }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="date">Fecha</Label>
-              <Input
-                id="date"
-                type="date"
-                value={form.date}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, date: e.target.value }))
-                }
-                required
               />
             </div>
 

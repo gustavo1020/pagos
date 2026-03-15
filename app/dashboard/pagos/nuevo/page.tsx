@@ -36,11 +36,13 @@ export default function NuevoPagoPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [deudaEnUSD, setDeudaEnUSD] = useState<any>(null);
+  const [cotizacionDolar, setCotizacionDolar] = useState("");
   const [form, setForm] = useState({
     toUserId: "",
     amount: "",
     comment: "",
-    date: new Date().toISOString().split("T")[0],
+    currency: "ARS",
   });
 
   const userId = session?.user?.id || "";
@@ -62,6 +64,28 @@ export default function NuevoPagoPage() {
       fetchUsers();
     }
   }, [userId]);
+
+  const loadDeudaEnUSD = async (toUserId: string) => {
+    if (!toUserId) {
+      setDeudaEnUSD(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/debts?userId=${toUserId}&isAdmin=true`);
+      const debts = await res.json();
+
+      // Find USD debts where the current user is the creditor
+      const deuda = debts.find(
+        (d: any) => d.currency === "USD" && d.debtorId === userId && d.creditorId === toUserId
+      );
+
+      setDeudaEnUSD(deuda || null);
+    } catch (error) {
+      console.error("Error cargando deudas:", error);
+      setDeudaEnUSD(null);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -119,9 +143,10 @@ export default function NuevoPagoPage() {
           fromUserId: userId,
           toUserId: form.toUserId,
           amount: parseInt(form.amount) * 100, // Convert to cents
+          currency: form.currency,
+          exchangeRate: cotizacionDolar ? parseFloat(cotizacionDolar) : null,
           comment: form.comment || null,
           receiptUrl: receiptUrl,
-          date: new Date(form.date),
         }),
       });
 
@@ -154,9 +179,10 @@ export default function NuevoPagoPage() {
               <Label htmlFor="to">Para (Usuario)</Label>
               <Select
                 value={form.toUserId}
-                onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, toUserId: value }))
-                }
+                onValueChange={(value) => {
+                  setForm((prev) => ({ ...prev, toUserId: value }));
+                  loadDeudaEnUSD(value);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona destino" />
@@ -169,10 +195,15 @@ export default function NuevoPagoPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {deudaEnUSD && (
+                <p className="text-sm text-amber-600 mt-2">
+                  ⚠️ Este usuario tiene una deuda pendiente de ${(deudaEnUSD.amount / 100).toFixed(2)} USD
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount">Monto (ARS)</Label>
+              <Label htmlFor="amount">Monto</Label>
               <Input
                 id="amount"
                 type="number"
@@ -188,6 +219,45 @@ export default function NuevoPagoPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="currency">Moneda</Label>
+              <Select
+                value={form.currency}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, currency: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona moneda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ARS">ARS (Pesos Argentinos)</SelectItem>
+                  <SelectItem value="USD">USD (Dólares)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {deudaEnUSD && form.currency === "ARS" && (
+              <div className="space-y-2">
+                <Label htmlFor="cotizacion">
+                  Cotización del Dólar (ARS)
+                </Label>
+                <Input
+                  id="cotizacion"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Ej: 1200.50"
+                  value={cotizacionDolar}
+                  onChange={(e) => setCotizacionDolar(e.target.value)}
+                  required
+                />
+                <p className="text-sm text-muted-foreground">
+                  El pago de ${(parseInt(form.amount || "0")).toFixed(0)} ARS equivaldrá a aproximadamente ${(parseInt(form.amount || "0") / (parseFloat(cotizacionDolar) || 1)).toFixed(2)} USD
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
               <Label htmlFor="comment">Comentario (opcional)</Label>
               <Input
                 id="comment"
@@ -197,19 +267,6 @@ export default function NuevoPagoPage() {
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, comment: e.target.value }))
                 }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="date">Fecha</Label>
-              <Input
-                id="date"
-                type="date"
-                value={form.date}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, date: e.target.value }))
-                }
-                required
               />
             </div>
 

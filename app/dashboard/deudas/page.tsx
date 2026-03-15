@@ -40,6 +40,8 @@ interface Debt {
     username: string;
   };
   amount: number;
+  balanceAmount: number;
+  currency: string;
   description?: string;
   date: string;
 }
@@ -141,7 +143,10 @@ export default function DebtasPage() {
                       <TableHead>Fecha</TableHead>
                       <TableHead>Acreedor</TableHead>
                       <TableHead>Deudor</TableHead>
-                      <TableHead>Monto</TableHead>
+                      <TableHead>Monto Original</TableHead>
+                      <TableHead>Saldo Pendiente</TableHead>
+                      <TableHead>Moneda</TableHead>
+                      <TableHead>Estado</TableHead>
                       <TableHead>Descripción</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -159,6 +164,27 @@ export default function DebtasPage() {
                           <Badge variant="outline">
                             {formatCurrency(debt.amount)}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={debt.balanceAmount === 0 ? "default" : "destructive"}>
+                            {formatCurrency(debt.balanceAmount)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {debt.currency}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {debt.balanceAmount === 0 ? (
+                            <Badge variant="outline" className="bg-green-100 text-green-800">
+                              Pagada
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                              Pendiente
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {debt.description || "-"}

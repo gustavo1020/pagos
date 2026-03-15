@@ -33,7 +33,47 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(debts);
+    // Get all payments to calculate remaining balance for each debt
+    const payments = await prisma.payment.findMany({
+      include: {
+        from: true,
+        to: true,
+      },
+    });
+
+    // Calculate balance for each debt considering payments
+    const debtsWithBalance = debts.map((debt) => {
+      let balanceAmount = debt.amount;
+
+      // Find payments from debtor to creditor
+      const relevantPayments = payments.filter(
+        (p) => p.fromUserId === debt.debtorId && p.toUserId === debt.creditorId
+      );
+
+      // Subtract payments from the debt
+      relevantPayments.forEach((payment) => {
+        if (payment.currency === debt.currency) {
+          // Same currency: direct subtraction
+          balanceAmount -= payment.amount;
+        } else if (debt.currency === "USD" && payment.currency === "ARS" && payment.exchangeRate) {
+          // ARS payment towards USD debt: convert using exchange rate
+          // exchangeRate is how many ARS per 1 USD
+          const usdAmount = Math.floor(payment.amount / payment.exchangeRate);
+          balanceAmount -= usdAmount;
+        } else if (debt.currency === "ARS" && payment.currency === "USD" && payment.exchangeRate) {
+          // USD payment towards ARS debt: convert using exchange rate
+          const arsAmount = payment.amount * payment.exchangeRate;
+          balanceAmount -= arsAmount;
+        }
+      });
+
+      return {
+        ...debt,
+        balanceAmount: Math.max(0, balanceAmount), // Don't show negative balance
+      };
+    });
+
+    return NextResponse.json(debtsWithBalance);
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -54,7 +94,7 @@ export async function POST(request: NextRequest) {
     const isAdmin = (session.user as any).role === "admin";
 
     const body = await request.json();
-    let { creditorId, debtorId, amount, description, date } = body;
+    let { creditorId, debtorId, amount, currency, description } = body;
 
     // Non-admin users can only create debts where they are the creditor
     if (!isAdmin) {
@@ -73,8 +113,8 @@ export async function POST(request: NextRequest) {
         creditorId,
         debtorId,
         amount: parseInt(amount),
+        currency: currency || "ARS",
         description: description || null,
-        date: new Date(date),
       },
       include: {
         creditor: true,
