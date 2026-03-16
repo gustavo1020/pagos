@@ -27,53 +27,37 @@ export async function GET(request: NextRequest) {
       include: {
         creditor: true,
         debtor: true,
+        payments: true,
       },
       orderBy: {
         date: "desc",
       },
     });
 
-    // Get all payments to calculate remaining balance for each debt
-    const payments = await prisma.payment.findMany({
-      include: {
-        from: true,
-        to: true,
-      },
-    });
-
-    // Calculate balance for each debt considering payments
-    const debtsWithBalance = debts.map((debt) => {
-      let balanceAmount = debt.amount;
-
-      // Find payments from debtor to creditor
-      const relevantPayments = payments.filter(
-        (p) => p.fromUserId === debt.debtorId && p.toUserId === debt.creditorId
-      );
-
-      // Subtract payments from the debt
-      relevantPayments.forEach((payment) => {
+    // Return debts with payment information included (no automatic subtraction)
+    const debtsWithPayments = debts.map((debt: typeof debts[0]) => {
+      // Calculate total paid from assigned payments
+      const totalPaid = debt.payments.reduce((sum: number, payment) => {
         if (payment.currency === debt.currency) {
-          // Same currency: direct subtraction
-          balanceAmount -= payment.amount;
+          return sum + payment.amount;
         } else if (debt.currency === "USD" && payment.currency === "ARS" && payment.exchangeRate) {
-          // ARS payment towards USD debt: convert using exchange rate
-          // exchangeRate is how many ARS per 1 USD
           const usdAmount = Math.floor(payment.amount / payment.exchangeRate);
-          balanceAmount -= usdAmount;
+          return sum + usdAmount;
         } else if (debt.currency === "ARS" && payment.currency === "USD" && payment.exchangeRate) {
-          // USD payment towards ARS debt: convert using exchange rate
           const arsAmount = payment.amount * payment.exchangeRate;
-          balanceAmount -= arsAmount;
+          return sum + arsAmount;
         }
-      });
+        return sum;
+      }, 0);
 
       return {
         ...debt,
-        balanceAmount: Math.max(0, balanceAmount), // Don't show negative balance
+        balanceAmount: debt.amount - totalPaid,
+        totalPaid,
       };
     });
 
-    return NextResponse.json(debtsWithBalance);
+    return NextResponse.json(debtsWithPayments);
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -119,10 +103,69 @@ export async function POST(request: NextRequest) {
       include: {
         creditor: true,
         debtor: true,
+        payments: true,
       },
     });
 
     return NextResponse.json(debt, { status: 201 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const isAdmin = (session.user as any).role === "admin";
+    const body = await request.json();
+    const { debtId, status } = body;
+
+    if (!debtId || !status) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Get debt to verify authorization
+    const debt = await prisma.debt.findUnique({
+      where: { id: debtId },
+      include: {
+        creditor: true,
+        debtor: true,
+        payments: true,
+      },
+    });
+
+    if (!debt) {
+      return NextResponse.json({ error: "Debt not found" }, { status: 404 });
+    }
+
+    // Only creditor or admin can change debt status
+    if (!isAdmin && debt.creditorId !== userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const updatedDebt = await prisma.debt.update({
+      where: { id: debtId },
+      data: { status },
+      include: {
+        creditor: true,
+        debtor: true,
+        payments: true,
+      },
+    });
+
+    return NextResponse.json(updatedDebt);
   } catch (error) {
     console.error(error);
     return NextResponse.json(

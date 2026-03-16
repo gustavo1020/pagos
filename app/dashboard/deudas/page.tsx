@@ -26,8 +26,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+
+interface Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  comment?: string;
+  status: string;
+  date: string;
+}
 
 interface Debt {
   id: string;
@@ -41,9 +58,12 @@ interface Debt {
   };
   amount: number;
   balanceAmount: number;
+  totalPaid: number;
   currency: string;
   description?: string;
+  status: string;
   date: string;
+  payments: Payment[];
 }
 
 interface User {
@@ -57,6 +77,10 @@ export default function DebtasPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string>("all");
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
+  const [showPaymentsDialog, setShowPaymentsDialog] = useState(false);
+  const [availablePayments, setAvailablePayments] = useState<any[]>([]);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const userId = session?.user?.id || "";
   const isAdmin = (session?.user as any)?.role === "admin";
@@ -68,21 +92,75 @@ export default function DebtasPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [debtsRes, usersRes] = await Promise.all([
+      const [debtsRes, usersRes, paymentsRes] = await Promise.all([
         fetch(`/api/debts?userId=${userId}&isAdmin=${isAdmin}`),
         fetch("/api/users"),
+        fetch("/api/payments"),
       ]);
 
       const debtsData = await debtsRes.json();
       const usersData = await usersRes.json();
+      const paymentsData = await paymentsRes.json();
 
       setDebts(debtsData);
       setUsers(usersData);
+      setAvailablePayments(paymentsData);
     } catch (error) {
-      toast.error("Error al cargar las deudas");
+      toast.error("Error al cargar los datos");
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenPaymentsDialog = (debt: Debt) => {
+    setSelectedDebt(debt);
+    setShowPaymentsDialog(true);
+  };
+
+  const handleAssignPayment = async (paymentId: string, debtId: string) => {
+    try {
+      const res = await fetch("/api/payments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId,
+          debtId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error asignando pago");
+
+      toast.success("Pago asignado correctamente");
+      fetchData();
+      setShowPaymentsDialog(false);
+    } catch (error) {
+      toast.error("Error al asignar pago");
+      console.error(error);
+    }
+  };
+
+  const handleChangeStatus = async (debtId: string, newStatus: string) => {
+    try {
+      setUpdatingStatus(true);
+      const res = await fetch("/api/debts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          debtId,
+          status: newStatus,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error actualizando estado");
+
+      toast.success("Estado actualizado");
+      fetchData();
+    } catch (error) {
+      toast.error("Error al actualizar estado");
+      console.error(error);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -91,6 +169,16 @@ export default function DebtasPage() {
         (d) => d.creditor.id === selectedUser || d.debtor.id === selectedUser
       )
     : debts;
+
+  const getUnassignedPayments = () => {
+    if (!selectedDebt) return [];
+    return availablePayments.filter(
+      (p) =>
+        p.fromUserId === selectedDebt.debtor.id &&
+        p.toUserId === selectedDebt.creditor.id &&
+        (!p.debtId || p.status === "pending")
+    );
+  };
 
   if (loading) {
     return (
@@ -144,10 +232,12 @@ export default function DebtasPage() {
                       <TableHead>Acreedor</TableHead>
                       <TableHead>Deudor</TableHead>
                       <TableHead>Monto Original</TableHead>
+                      <TableHead>Pagado</TableHead>
                       <TableHead>Saldo Pendiente</TableHead>
                       <TableHead>Moneda</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Descripción</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -166,28 +256,75 @@ export default function DebtasPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={debt.balanceAmount === 0 ? "default" : "destructive"}>
+                          <Badge variant="secondary">
+                            {formatCurrency(debt.totalPaid)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              debt.balanceAmount === 0
+                                ? "default"
+                                : "destructive"
+                            }
+                          >
                             {formatCurrency(debt.balanceAmount)}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {debt.currency}
-                          </Badge>
+                          <Badge variant="secondary">{debt.currency}</Badge>
                         </TableCell>
                         <TableCell>
-                          {debt.balanceAmount === 0 ? (
-                            <Badge variant="outline" className="bg-green-100 text-green-800">
-                              Pagada
-                            </Badge>
+                          {userId === debt.creditor.id || isAdmin ? (
+                            <Select
+                              value={debt.status}
+                              onValueChange={(value) =>
+                                handleChangeStatus(debt.id, value)
+                              }
+                              disabled={updatingStatus}
+                            >
+                              <SelectTrigger className="w-[120px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">
+                                  Pendiente
+                                </SelectItem>
+                                <SelectItem value="partial">Parcial</SelectItem>
+                                <SelectItem value="paid">Pagada</SelectItem>
+                                <SelectItem value="completed">
+                                  Finalizado
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                              Pendiente
+                            <Badge
+                              variant="outline"
+                              className={
+                                debt.status === "completed"
+                                  ? "bg-green-100 text-green-800"
+                                  : debt.status === "paid"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                              }
+                            >
+                              {debt.status}
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {debt.description || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {(userId === debt.creditor.id || isAdmin) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenPaymentsDialog(debt)}
+                            >
+                              Asignar Pago
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -198,6 +335,89 @@ export default function DebtasPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={showPaymentsDialog} onOpenChange={setShowPaymentsDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Asignar Pagos a Deuda</DialogTitle>
+            <DialogDescription>
+              {selectedDebt && (
+                <>
+                  Deudor: <strong>{selectedDebt.debtor.username}</strong> - Monto:{" "}
+                  <strong>{formatCurrency(selectedDebt.amount)}</strong>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
+            {getUnassignedPayments().length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay pagos sin asignar
+              </p>
+            ) : (
+              getUnassignedPayments().map((payment) => (
+                <div
+                  key={payment.id}
+                  className="flex items-center justify-between border rounded-lg p-3"
+                >
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {formatCurrency(payment.amount)} {payment.currency}
+                    </p>
+                    {payment.comment && (
+                      <p className="text-xs text-muted-foreground">
+                        Comentario: {payment.comment}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(new Date(payment.date))}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      handleAssignPayment(payment.id, selectedDebt!.id)
+                    }
+                  >
+                    Asignar
+                  </Button>
+                </div>
+              ))
+            )}
+
+            {selectedDebt?.payments && selectedDebt.payments.length > 0 && (
+              <>
+                <div className="pt-4 border-t">
+                  <h4 className="text-sm font-semibold mb-3">
+                    Pagos Asignados
+                  </h4>
+                  {selectedDebt.payments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between bg-green-50 rounded-lg p-3 mb-2"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                          {formatCurrency(payment.amount)} {payment.currency}
+                        </p>
+                        {payment.comment && (
+                          <p className="text-xs text-muted-foreground">
+                            {payment.comment}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="bg-green-100">
+                        Asignado
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

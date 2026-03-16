@@ -26,7 +26,10 @@ RUN npm install
 # Copy rest of the application
 COPY . .
 
-# Build Next.js (Prisma Client generates automatically)
+# Generate Prisma Client before building
+RUN npx prisma generate
+
+# Build Next.js
 RUN npm run build
 
 # Production stage

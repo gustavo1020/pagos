@@ -23,6 +23,7 @@ model User {
   debtoryDebts   Debt[] @relation("debtor")
   paymentsFrom   Payment[] @relation("payer")
   paymentsTo     Payment[] @relation("payee")
+  notifications  Notification[]
 }
 
 model Debt {
@@ -34,9 +35,13 @@ model Debt {
   amount      Int        // Amount in cents
   currency    String     @default("ARS") // "ARS" or "USD"
   description String?
+  status      String     @default("pending") // "pending", "partial", "paid", "completed"
   date        DateTime   @default(now())
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  // Relations
+  payments    Payment[] @relation("debtPayments")
 
   @@index([creditorId])
   @@index([debtorId])
@@ -48,15 +53,36 @@ model Payment {
   fromUserId String
   to        User       @relation("payee", fields: [toUserId], references: [id], onDelete: Cascade)
   toUserId  String
+  debt      Debt?      @relation("debtPayments", fields: [debtId], references: [id], onDelete: SetNull)
+  debtId    String?    // Optional: linked to specific debt
   amount    Int        // Amount in cents
   currency  String     @default("ARS") // "ARS" or "USD"
   exchangeRate Float?   // Exchange rate used if payment in ARS for USD debt
   comment   String?
   receiptUrl String?
+  status    String     @default("pending") // "pending" (awaiting creditor assignment), "assigned", "completed"
   date      DateTime   @default(now())
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
   @@index([fromUserId])
   @@index([toUserId])
+  @@index([debtId])
+}
+
+model Notification {
+  id        String     @id @default(cuid())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String     // "payment_received", "payment_assigned", "debt_completed"
+  title     String
+  message   String
+  debtId    String?    // Optional: linked to debt
+  paymentId String?    // Optional: linked to payment
+  read      Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
 }

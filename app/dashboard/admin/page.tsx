@@ -64,9 +64,9 @@ export default async function AdminPage() {
   > = {};
 
   // Initialize matrix
-  users.forEach((user1) => {
+  users.forEach((user1: typeof users[0]) => {
     balanceMatrix[user1.id] = {};
-    users.forEach((user2) => {
+    users.forEach((user2: typeof users[0]) => {
       if (user1.id !== user2.id) {
         balanceMatrix[user1.id][user2.id] = {
           debts: 0,
@@ -78,7 +78,7 @@ export default async function AdminPage() {
   });
 
   // Fill in debts
-  allDebts.forEach((debt) => {
+  allDebts.forEach((debt: typeof allDebts[0]) => {
     if (balanceMatrix[debt.debtorId] && balanceMatrix[debt.debtorId][debt.creditorId]) {
       balanceMatrix[debt.debtorId][debt.creditorId].debts += debt.amount;
       balanceMatrix[debt.debtorId][debt.creditorId].net += debt.amount;
@@ -86,7 +86,7 @@ export default async function AdminPage() {
   });
 
   // Fill in payments
-  allPayments.forEach((payment) => {
+  allPayments.forEach((payment: typeof allPayments[0]) => {
     if (balanceMatrix[payment.fromUserId] && balanceMatrix[payment.fromUserId][payment.toUserId]) {
       balanceMatrix[payment.fromUserId][payment.toUserId].payments += payment.amount;
       balanceMatrix[payment.fromUserId][payment.toUserId].net -= payment.amount;
@@ -94,8 +94,8 @@ export default async function AdminPage() {
   });
 
   // Calculate summary statistics
-  const totalDebtsAmount = allDebts.reduce((sum, d) => sum + d.amount, 0);
-  const totalPaymentsAmount = allPayments.reduce((sum, p) => sum + p.amount, 0);
+  const totalDebtsAmount = allDebts.reduce((sum: number, d: typeof allDebts[0]) => sum + d.amount, 0);
+  const totalPaymentsAmount = allPayments.reduce((sum: number, p: typeof allPayments[0]) => sum + p.amount, 0);
   const outstandingAmount = totalDebtsAmount - totalPaymentsAmount;
 
   return (
@@ -166,7 +166,7 @@ export default async function AdminPage() {
                 <thead>
                   <tr className="border-b border-zinc-800">
                     <th className="text-left p-2 font-semibold">Usuario</th>
-                    {users.map((user) => (
+                    {users.map((user: typeof users[0]) => (
                       <th key={user.id} className="text-center p-2 text-xs">
                         {user.username.substring(0, 3)}
                       </th>
@@ -174,10 +174,10 @@ export default async function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user1) => (
+                  {users.map((user1: typeof users[0]) => (
                     <tr key={user1.id} className="border-b border-zinc-800">
                       <td className="p-2 font-medium">{user1.username}</td>
-                      {users.map((user2) => {
+                      {users.map((user2: typeof users[0]) => {
                         if (user1.id === user2.id) {
                           return (
                             <td key={user2.id} className="text-center p-2">
@@ -219,7 +219,7 @@ export default async function AdminPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="font-semibold mb-2">Últimas Deudas Registradas</h3>
-                {allDebts.slice(-5).map((debt) => (
+                {allDebts.slice(-5).map((debt: typeof allDebts[0]) => (
                   <div key={debt.id} className="text-sm p-2 rounded bg-zinc-900/50 mb-2">
                     <p>
                       <span className="font-medium">{debt.creditor.username}</span> →{" "}
@@ -237,7 +237,7 @@ export default async function AdminPage() {
 
               <div>
                 <h3 className="font-semibold mb-2">Últimos Pagos Realizados</h3>
-                {allPayments.slice(-5).map((payment) => (
+                {allPayments.slice(-5).map((payment: typeof allPayments[0]) => (
                   <div key={payment.id} className="text-sm p-2 rounded bg-zinc-900/50 mb-2">
                     <p>
                       <span className="font-medium">{payment.from.username}</span> →{" "}

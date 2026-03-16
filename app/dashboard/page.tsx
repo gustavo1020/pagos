@@ -27,6 +27,11 @@ export default async function DashboardPage() {
   // Get all debts and payments involving this user (or all if admin)
   const debts = isAdmin
     ? await prisma.debt.findMany({
+        where: {
+          status: {
+            notIn: ["paid", "completed"],
+          },
+        },
         include: {
           creditor: true,
           debtor: true,
@@ -34,7 +39,16 @@ export default async function DashboardPage() {
       })
     : await prisma.debt.findMany({
         where: {
-          OR: [{ creditorId: userId }, { debtorId: userId }],
+          AND: [
+            {
+              OR: [{ creditorId: userId }, { debtorId: userId }],
+            },
+            {
+              status: {
+                notIn: ["paid", "completed"],
+              },
+            },
+          ],
         },
         include: {
           creditor: true,
@@ -72,14 +86,14 @@ export default async function DashboardPage() {
     }
   > = {};
 
-  users.forEach((user) => {
+  users.forEach((user: typeof users[0]) => {
     if (user.id !== userId || isAdmin) {
       const otherUserId = user.id;
       const otherUsername = user.username;
       const balancesByCurrency: Record<string, number> = {};
 
-      // Get user debts and calculate balance after deducting payments
-      const userDebts = debts.filter((d) => {
+      // Get user debts
+      const userDebts = debts.filter((d: typeof debts[0]) => {
         if (isAdmin) {
           return (
             (d.creditorId === userId && d.debtorId === otherUserId) ||
@@ -93,49 +107,13 @@ export default async function DashboardPage() {
         }
       });
 
-      // Get user payments related to these debts
-      const userPayments = payments.filter((p) => {
-        if (isAdmin) {
-          return (
-            (p.fromUserId === userId && p.toUserId === otherUserId) ||
-            (p.toUserId === userId && p.fromUserId === otherUserId)
-          );
-        } else {
-          return (
-            (p.fromUserId === userId && p.toUserId === otherUserId) ||
-            (p.toUserId === userId && p.fromUserId === otherUserId)
-          );
-        }
-      });
-
-      // Calculate balance for each debt considering payments
-      userDebts.forEach((d) => {
+      // Calculate balance for each debt (without subtracting payments)
+      userDebts.forEach((d: typeof userDebts[0]) => {
         const sign = d.debtorId === userId ? 1 : -1;
-        let balanceAmount = d.amount;
+        // Only use the original debt amount, don't subtract payments
+        const balanceAmount = d.amount;
 
-        // Find payments from debtor to creditor that apply to this debt
-        const relevantPayments = userPayments.filter(
-          (p) => p.fromUserId === d.debtorId && p.toUserId === d.creditorId
-        );
-
-        // Subtract payments considering currency conversion
-        relevantPayments.forEach((payment) => {
-          if (payment.currency === d.currency) {
-            // Same currency: direct subtraction
-            balanceAmount -= payment.amount;
-          } else if (d.currency === "USD" && payment.currency === "ARS" && payment.exchangeRate) {
-            // ARS payment towards USD debt: convert using exchange rate
-            const usdAmount = Math.floor(payment.amount / payment.exchangeRate);
-            balanceAmount -= usdAmount;
-          } else if (d.currency === "ARS" && payment.currency === "USD" && payment.exchangeRate) {
-            // USD payment towards ARS debt: convert using exchange rate
-            const arsAmount = payment.amount * payment.exchangeRate;
-            balanceAmount -= arsAmount;
-          }
-        });
-
-        // Add net balance to total
-        balanceAmount = Math.max(0, balanceAmount);
+        // Add net balance to total (without considering payments)
         balancesByCurrency[d.currency] = (balancesByCurrency[d.currency] || 0) + balanceAmount * sign;
       });
 
@@ -153,9 +131,9 @@ export default async function DashboardPage() {
   const balanceEntries = Object.values(balances);
 
   // Calculate average exchange rate from payments
-  const paymentsWithExchangeRate = payments.filter((p) => p.exchangeRate);
+  const paymentsWithExchangeRate = payments.filter((p: typeof payments[0]) => p.exchangeRate);
   const averageExchangeRate = paymentsWithExchangeRate.length > 0
-    ? paymentsWithExchangeRate.reduce((sum, p) => sum + (p.exchangeRate || 0), 0) /
+    ? paymentsWithExchangeRate.reduce((sum: number, p: typeof paymentsWithExchangeRate[0]) => sum + (p.exchangeRate || 0), 0) /
       paymentsWithExchangeRate.length
     : 1000; // Default fallback rate if no payments with exchange rate
 
@@ -165,8 +143,8 @@ export default async function DashboardPage() {
     USD: { owed: 0, credits: 0 },
   };
 
-  balanceEntries.forEach((balance) => {
-    Object.entries(balance.balancesByCurrency).forEach(([currency, amount]) => {
+  balanceEntries.forEach((balance: typeof balanceEntries[0]) => {
+    Object.entries(balance.balancesByCurrency).forEach(([currency, amount]: [string, number]) => {
       if (amount > 0) {
         totals[currency].owed += amount;
       } else {
