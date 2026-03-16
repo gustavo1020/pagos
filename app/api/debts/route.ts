@@ -174,3 +174,49 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isAdmin = (session.user as any).role === "admin";
+    
+    // Only admins can delete debts
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Only admins can delete debts" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { debtId } = body;
+
+    if (!debtId) {
+      return NextResponse.json(
+        { error: "Missing debtId" },
+        { status: 400 }
+      );
+    }
+
+    const debt = await prisma.debt.findUnique({
+      where: { id: debtId },
+    });
+
+    if (!debt) {
+      return NextResponse.json({ error: "Debt not found" }, { status: 404 });
+    }
+
+    await prisma.debt.delete({
+      where: { id: debtId },
+    });
+
+    return NextResponse.json({ message: "Debt deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

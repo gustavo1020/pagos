@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 interface Payment {
   id: string;
@@ -161,6 +162,30 @@ export default function DebtasPage() {
       console.error(error);
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleDeleteDebt = async (debtId: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar esta deuda?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/debts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          debtId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error eliminando deuda");
+
+      toast.success("Deuda eliminada");
+      fetchData();
+    } catch (error) {
+      toast.error("Error al eliminar deuda");
+      console.error(error);
     }
   };
 
@@ -316,15 +341,26 @@ export default function DebtasPage() {
                           {debt.description || "-"}
                         </TableCell>
                         <TableCell>
-                          {(userId === debt.creditor.id || isAdmin) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenPaymentsDialog(debt)}
-                            >
-                              Asignar Pago
-                            </Button>
-                          )}
+                          <div className="flex gap-2">
+                            {(userId === debt.creditor.id || isAdmin) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenPaymentsDialog(debt)}
+                              >
+                                Asignar Pago
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteDebt(debt.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

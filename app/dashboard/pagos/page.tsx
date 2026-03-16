@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import { Link as LinkIcon } from "lucide-react";
+import { Link as LinkIcon, Trash2 } from "lucide-react";
 
 interface Payment {
   id: string;
@@ -86,6 +86,30 @@ export default function PagosPage() {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este pago?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/payments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error eliminando pago");
+
+      toast.success("Pago eliminado");
+      fetchData();
+    } catch (error) {
+      toast.error("Error al eliminar pago");
+      console.error(error);
     }
   };
 
@@ -147,6 +171,7 @@ export default function PagosPage() {
                       <TableHead>Cotización</TableHead>
                       <TableHead>Comentario</TableHead>
                       <TableHead>Comprobante</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -193,6 +218,17 @@ export default function PagosPage() {
                             </Button>
                           ) : (
                             <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isAdmin && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeletePayment(payment.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </TableCell>
                       </TableRow>

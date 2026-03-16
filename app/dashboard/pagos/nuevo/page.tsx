@@ -112,6 +112,11 @@ export default function NuevoPagoPage() {
       return;
     }
 
+    if (!file) {
+      toast.error("El comprobante de pago es requerido");
+      return;
+    }
+
     setLoading(true);
     try {
       let receiptUrl = null;
@@ -272,7 +277,7 @@ export default function NuevoPagoPage() {
 
             <div className="space-y-2">
               <Label htmlFor="receipt">
-                Comprobante de Pago (imagen - opcional, máx 5MB)
+                Comprobante de Pago <span className="text-red-500">*</span> (imagen - máx 5MB)
               </Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -281,6 +286,7 @@ export default function NuevoPagoPage() {
                   accept="image/*"
                   onChange={handleFileChange}
                   className="cursor-pointer"
+                  required
                 />
               </div>
               {file && (

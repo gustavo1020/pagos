@@ -41,7 +41,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
     { href: "/dashboard/deudas", label: "Deudas", Icon: CreditCard },
     { href: "/dashboard/pagos", label: "Pagos", Icon: DollarSign },
-    { href: "/dashboard/activos", label: "Dónde está su plata", Icon: Wallet },
+    { href: "/dashboard/activos", label: "Dónde está mi plata", Icon: Wallet },
     { href: "/dashboard/pagos/nuevo", label: "Registrar Pago", Icon: Plus },
     { href: "/dashboard/deudas/nueva", label: "Nueva Deuda", Icon: FileText },
     ...(isAdmin

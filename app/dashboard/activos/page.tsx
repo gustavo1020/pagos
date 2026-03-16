@@ -199,7 +199,7 @@ export default function AssetsPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Dónde está su plata</h1>
+            <h1 className="text-3xl font-bold">dónde está mi plata</h1>
             <p className="text-gray-600">
               Gestiona y rastrea la ubicación de tus activos
             </p>

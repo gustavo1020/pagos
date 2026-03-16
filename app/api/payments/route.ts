@@ -60,9 +60,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!fromUserId || !toUserId || !amount) {
+    if (!fromUserId || !toUserId || !amount || !receiptUrl) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields. Receipt URL is required." },
         { status: 400 }
       );
     }
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         currency: currency || "ARS",
         exchangeRate: exchangeRate || null,
         comment: comment || null,
-        receiptUrl: receiptUrl || null,
+        receiptUrl: receiptUrl,
         status: "pending",
       },
       include: {
@@ -183,6 +183,52 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json(updatedPayment);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isAdmin = (session.user as any).role === "admin";
+    
+    // Only admins can delete payments
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Only admins can delete payments" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { paymentId } = body;
+
+    if (!paymentId) {
+      return NextResponse.json(
+        { error: "Missing paymentId" },
+        { status: 400 }
+      );
+    }
+
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment) {
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    }
+
+    await prisma.payment.delete({
+      where: { id: paymentId },
+    });
+
+    return NextResponse.json({ message: "Payment deleted successfully" });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
