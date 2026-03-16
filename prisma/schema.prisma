@@ -24,6 +24,7 @@ model User {
   paymentsFrom   Payment[] @relation("payer")
   paymentsTo     Payment[] @relation("payee")
   notifications  Notification[]
+  assets         Asset[]
 }
 
 model Debt {
@@ -82,6 +83,23 @@ model Notification {
   read      Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Asset {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  description String     // "Invertí $25,000 USD en negocio", "Tengo $1,500,000 ARS en casa", etc
+  amount      Int        // Amount in cents
+  currency    String     @default("ARS") // "ARS" or "USD"
+  category    String?    // Optional: "business", "savings", "home", "bank", etc
+  comment     String?    // Additional notes
+  date        DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([userId])
   @@index([createdAt])

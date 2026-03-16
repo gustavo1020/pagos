@@ -11,8 +11,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LogOut, Menu } from "lucide-react";
+import {
+  LogOut,
+  Menu,
+  LayoutDashboard,
+  CreditCard,
+  DollarSign,
+  Wallet,
+  Plus,
+  FileText,
+  Settings,
+} from "lucide-react";
 import { useState } from "react";
+
+interface NavItem {
+  href: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -21,15 +37,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const isAdmin = (session?.user as any)?.role === "admin";
 
-  const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "📊" },
-    { href: "/dashboard/deudas", label: "Deudas", icon: "💳" },
-    { href: "/dashboard/pagos", label: "Pagos", icon: "💰" },
-    { href: "/dashboard/pagos/nuevo", label: "Registrar Pago", icon: "➕" },
-    { href: "/dashboard/deudas/nueva", label: "Nueva Deuda", icon: "📝" },
+  const navItems: NavItem[] = [
+    { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+    { href: "/dashboard/deudas", label: "Deudas", Icon: CreditCard },
+    { href: "/dashboard/pagos", label: "Pagos", Icon: DollarSign },
+    { href: "/dashboard/activos", label: "Dónde está su plata", Icon: Wallet },
+    { href: "/dashboard/pagos/nuevo", label: "Registrar Pago", Icon: Plus },
+    { href: "/dashboard/deudas/nueva", label: "Nueva Deuda", Icon: FileText },
     ...(isAdmin
       ? [
-          { href: "/dashboard/admin", label: "Panel Admin", icon: "⚙️" },
+          { href: "/dashboard/admin", label: "Panel Admin", Icon: Settings },
         ]
       : []),
   ];
@@ -69,13 +86,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block p-2 rounded ${
+                className={`flex items-center p-2 rounded ${
                   pathname === item.href
                     ? "bg-primary text-white"
                     : "hover:bg-zinc-900"
                 }`}
               >
-                {item.icon} {item.label}
+                <item.Icon className="h-4 w-4 mr-2" />
+                {item.label}
               </Link>
             ))}
             <Button
@@ -98,13 +116,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block p-3 rounded-lg transition-colors ${
+                className={`flex items-center p-3 rounded-lg transition-colors ${
                   pathname === item.href
                     ? "bg-primary text-white"
                     : "hover:bg-zinc-900 text-muted-foreground"
                 }`}
               >
-                <span className="mr-2">{item.icon}</span>
+                <item.Icon className="h-4 w-4 mr-2" />
                 {item.label}
               </Link>
             ))}
