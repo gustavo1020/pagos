@@ -36,9 +36,6 @@ services:
       DATABASE_URL: postgresql://pagos_user:pagos_password_secure@postgres:5432/pagos_db
       NEXTAUTH_SECRET: super_secret_key_for_development_12345678901234567890
       NEXTAUTH_URL: http://localhost:3000
-      NEXT_PUBLIC_SUPABASE_URL: https://your-project.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: your-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: your-service-role-key
       OPENSSL_CONF: /etc/ssl/openssl.cnf
       LD_LIBRARY_PATH: /lib64:/usr/lib64:/usr/local/lib64
     ports:
@@ -47,6 +44,7 @@ services:
       - .:/app
       - /app/.next
       - /app/node_modules
+      - uploads:/app/public/uploads
     command: >
       sh -c "
         chmod +x ./wait-for-db.sh &&
@@ -70,6 +68,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  uploads:
     driver: local
 
 networks:

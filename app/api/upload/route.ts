@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { getSupabaseClient } from "@/lib/supabase";
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -30,33 +31,20 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Get Supabase client
-    const supabase = getSupabaseClient();
+    // Save to local volume
+    const uploadDir = join(process.cwd(), "public", "uploads", bucket);
+    await mkdir(uploadDir, { recursive: true });
+    
+    const filePath = join(uploadDir, filename);
+    await writeFile(filePath, buffer);
 
-    // Upload to Supabase
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filename, buffer, {
-        contentType: file.type,
-      });
-
-    if (error) {
-      console.error("Supabase error:", error);
-      return NextResponse.json(
-        { error: "Failed to upload file" },
-        { status: 500 }
-      );
-    }
-
-    // Get public URL
-    const { data: publicData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filename);
+    // Return relative URL path
+    const publicUrl = `/uploads/${bucket}/${filename}`;
 
     return NextResponse.json(
       {
-        url: publicData?.publicUrl || null,
-        path: data?.path,
+        url: publicUrl,
+        path: `uploads/${bucket}/${filename}`,
       },
       { status: 201 }
     );
