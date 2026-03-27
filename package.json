@@ -9,7 +9,7 @@
     "lint": "eslint",
     "db:push": "prisma db push --skip-generate",
     "db:studio": "prisma studio",
-    "seed": "node --loader ts-node/esm prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
