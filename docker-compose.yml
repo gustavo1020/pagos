@@ -52,8 +52,6 @@ services:
         ./wait-for-db.sh postgres 5432 60 &&
         echo 'PostgreSQL is ready, running migrations...' &&
         npx prisma db push --skip-generate &&
-        echo 'Running seed...' &&
-        npx prisma db seed &&
         echo 'Starting app...' &&
         npm run dev
       "

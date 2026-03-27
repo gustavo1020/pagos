@@ -26,12 +26,18 @@ async function main() {
     return;
   }
 
-  console.log("Clearing existing users...");
-  await prisma.user.deleteMany();
-
-  // Create users with hashed passwords
-  console.log("Creating seed users...");
+  // Create users with hashed passwords (don't delete existing)
+  console.log("Creating seed users (only if they don't exist)...");
   for (const user of usersData) {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    if (existingUser) {
+      console.log(`ℹ User already exists: ${existingUser.username}. Skipping...`);
+      continue;
+    }
+
     const hashedPassword = await hash(user.password, 10);
     const createdUser = await prisma.user.create({
       data: {
